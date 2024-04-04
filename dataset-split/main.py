@@ -1,21 +1,21 @@
 import random
 import logging
 
-from coretex import ComputerVisionDataset, ComputerVisionSample, ImageDatasetClasses
+from coretex import ImageDataset, ImageSample, ImageDatasetClasses
 from coretex.networking import networkManager
 
 
 USERNAME = ""  # Coretex username
 PASSWORD = ""  # Coretex password
-PROJECT_ID = 27138  # ID of the Project where the train/valid Datasets will be created
-DATASET_ID = 30853  # ID of the Dataset which will be split into train/valid parts
+PROJECT_ID = 1  # ID of the Project where the train/valid Datasets will be created
+DATASET_ID = 1  # ID of the Dataset which will be split into train/valid parts
 VALID_PCT  = 0.2  # % amount in range of 0-1 of how many Samples will be placed in validation Dataset
 
 
-def createDataset(name: str, projectId: int, samples: list[ComputerVisionSample], classes: ImageDatasetClasses) -> None:
+def createDataset(name: str, projectId: int, samples: list[ImageSample], classes: ImageDatasetClasses) -> None:
     logging.info(f">> [Coretex] Creating dataset \"{name}\"")
 
-    dataset = ComputerVisionDataset.createDataset(name, projectId)
+    dataset = ImageDataset.createDataset(name, projectId)
     if dataset is None:
         raise RuntimeError(f"Failed to create dataset \"{name}\"")
 
@@ -27,9 +27,10 @@ def createDataset(name: str, projectId: int, samples: list[ComputerVisionSample]
 
         sample.unzip()
 
-        copy = ComputerVisionSample.createComputerVisionSample(dataset.id, sample.imagePath)
-        if copy is None:
-            logging.info(f"\tFailed to copy sample \"{sample.name}\"")
+        try:
+            copy = dataset.add(sample.imagePath)
+        except BaseException as ex:
+            logging.info(f"\tFailed to copy sample \"{sample.name}\" - {ex}")
             continue
 
         annotation = sample.load().annotation
@@ -48,7 +49,7 @@ def main() -> None:
     if response.hasFailed():
         raise RuntimeError("Failed to authenticate")
 
-    dataset = ComputerVisionDataset.fetchById(DATASET_ID)
+    dataset = ImageDataset.fetchById(DATASET_ID)
     dataset.download()
 
     # Shuffle before splitting
