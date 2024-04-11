@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import os
 import logging
 
-from coretex import ComputerVisionDataset, ComputerVisionSample
+from coretex import ImageDataset, ImageSample
 from coretex.networking import networkManager
 
 
@@ -14,7 +14,7 @@ SOURCE_BACKEND_URL = ""
 SOURCE_USERNAME = ""
 SOURCE_PASSWORD = ""
 # Dataset which will be transfered
-SOURCE_DATASET_ID = 30852
+SOURCE_DATASET_ID = 1
 
 # URL of the destination environment
 DESTINATION_BACKEND_URL = ""
@@ -45,7 +45,7 @@ def backend(url: str, username: str, password: str) -> Iterator[None]:
         os.environ["CTX_API_URL"] = oldUrl
 
 
-def copyAnnotation(source: ComputerVisionSample, destination: ComputerVisionSample, retryCount: int = 0) -> None:
+def copyAnnotation(source: ImageSample, destination: ImageSample, retryCount: int = 0) -> None:
     if retryCount >= 3:
         raise RuntimeError(f"Failed to copy annotation from '{source.id} - {source.name}' to '{destination.id} - {destination.name}'")
 
@@ -55,34 +55,35 @@ def copyAnnotation(source: ComputerVisionSample, destination: ComputerVisionSamp
             copyAnnotation(source, destination, retryCount + 1)
 
 
-def copySample(source: ComputerVisionSample, destinationDatasetId: int, retryCount: int = 0) -> ComputerVisionSample:
+def copySample(source: ImageSample, destinationDataset: ImageDataset, retryCount: int = 0) -> ImageSample:
     if retryCount >= 3:
         raise RuntimeError(f"Failed to create sample from \"{source.id} - {source.name}\" at path \"{source.imagePath}\"")
 
     source.unzip()
 
-    destination = ComputerVisionSample.createComputerVisionSample(destinationDatasetId, source.imagePath)
-    if destination is None:
-        return copySample(source, destinationDatasetId, retryCount + 1)
+    try:
+        destination = destinationDataset.add(source.imagePath)
+    except:
+        return copySample(source, destinationDataset, retryCount + 1)
 
     return destination
 
 
 def main() -> None:
     with backend(SOURCE_BACKEND_URL, SOURCE_USERNAME, SOURCE_PASSWORD):
-        sourceDataset = ComputerVisionDataset.fetchById(SOURCE_DATASET_ID)
+        sourceDataset = ImageDataset.fetchById(SOURCE_DATASET_ID)
         sourceDataset.download()
 
     with backend(DESTINATION_BACKEND_URL, DESTINATION_USERNAME, DESTINATION_PASSWORD):
         logging.info(f">> [Coretex] Creating destination dataset \"{sourceDataset.name}\"")
 
-        destinationDataset = ComputerVisionDataset.createDataset(sourceDataset.name, DESTINATION_PROJECT_ID)
+        destinationDataset = ImageDataset.createDataset(sourceDataset.name, DESTINATION_PROJECT_ID)
         destinationDataset.saveClasses(sourceDataset.classes)
 
         for index, sourceSample in enumerate(sourceDataset.samples):
             logging.info(f"\tCopying sample {index + 1}/{sourceDataset.count} - {sourceSample.name}")
 
-            destinationSample = copySample(sourceSample, destinationDataset.id)
+            destinationSample = copySample(sourceSample, destinationDataset)
             copyAnnotation(sourceSample, destinationSample)
 
 
